@@ -200,13 +200,20 @@ export class ServiceNowClient {
   }
 
   /**
-   * Health check / ping test. Queries 1 record from sys_properties or sys_user to confirm connectivity.
+   * Health check / ping test. Queries 1 record from incident to confirm connectivity.
    */
   public async ping(): Promise<{ ok: boolean; message: string }> {
     try {
-      await this.queryTable("sys_properties", { sysparm_limit: 1 });
-      return { ok: true, message: "Successfully connected to ServiceNow instance." };
+      await this.queryTable("incident", { sysparm_limit: 1 });
+      return { ok: true, message: "Successfully connected to ServiceNow instance and verified incident access." };
     } catch (err: any) {
+      if (err.message && err.message.includes("Access to unscoped api is not allowed")) {
+        return {
+          ok: false,
+          message:
+            "OAuth Scope Restriction error: In ServiceNow PDI, go to 'System OAuth' -> 'Application Registry', open your record, change 'Scope Restriction' from 'Securely Scoped' to 'Broadly Scoped', and click Update.",
+        };
+      }
       return { ok: false, message: err.message };
     }
   }
