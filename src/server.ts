@@ -27,7 +27,6 @@ export function createApp(customConfig?: ServerConfig) {
   app.use(cors());
   app.use((_req, res, next) => {
     res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Content-Encoding", "identity");
     res.setHeader("X-Accel-Buffering", "no");
     next();
   });
