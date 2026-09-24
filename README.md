@@ -199,7 +199,7 @@ Add the server definition into your workspace or global `mcp_config.json`:
 {
   "mcpServers": {
     "servicenow": {
-      "serverUrl": "https://<your-service-name>.onrender.com/sse?token=YOUR_MCP_API_KEY"
+      "serverUrl": "https://<your-service-name>.onrender.com/mcp?token=YOUR_MCP_API_KEY"
     }
   }
 }
