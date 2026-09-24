@@ -6,6 +6,7 @@ import { registerProblemTools } from "./problem.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerUserGroupTools } from "./user_group.js";
 import { registerTableApiTools } from "./table_api.js";
+import { registerAttachmentTools } from "./attachment.js";
 
 export function registerAllTools(server: McpServer, client: ServiceNowClient) {
   // Register ServiceNow connection health check tool
@@ -44,4 +45,5 @@ export function registerAllTools(server: McpServer, client: ServiceNowClient) {
   registerKnowledgeTools(server, client);
   registerUserGroupTools(server, client);
   registerTableApiTools(server, client);
+  registerAttachmentTools(server, client);
 }

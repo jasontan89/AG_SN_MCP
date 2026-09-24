@@ -41,9 +41,9 @@ export class ServiceNowClient {
   }
 
   /**
-   * Wrapper for making authenticated HTTP requests with automatic 401 retry on OAuth.
+   * Core authenticated HTTP request method returning the full Axios response.
    */
-  private async request<T>(axiosConfig: AxiosRequestConfig, retryCount = 0): Promise<T> {
+  public async rawRequest<T = any>(axiosConfig: AxiosRequestConfig, retryCount = 0): Promise<AxiosResponse<T>> {
     try {
       const authHeaders = await this.getAuthHeaders();
       const headers = { ...axiosConfig.headers, ...authHeaders };
@@ -53,16 +53,24 @@ export class ServiceNowClient {
         headers,
       });
 
-      return response.data;
+      return response;
     } catch (err: any) {
       // Check for token expiration / 401 in OAuth mode: retry once with fresh token
       if (err.response?.status === 401 && this.config.serviceNow.authType === "oauth" && retryCount === 0) {
         this.oauthManager.clearToken();
-        return this.request<T>(axiosConfig, retryCount + 1);
+        return this.rawRequest<T>(axiosConfig, retryCount + 1);
       }
 
       this.handleServiceNowError(err);
     }
+  }
+
+  /**
+   * Wrapper for making authenticated HTTP requests returning response data.
+   */
+  private async request<T>(axiosConfig: AxiosRequestConfig): Promise<T> {
+    const response = await this.rawRequest<T>(axiosConfig);
+    return response.data;
   }
 
   /**
@@ -216,5 +224,92 @@ export class ServiceNowClient {
       }
       return { ok: false, message: err.message };
     }
+  }
+
+  /**
+   * List all attachments linked to a specific record.
+   */
+  public async listAttachments(tableName: string, recordSysId: string): Promise<any[]> {
+    const data = await this.request<ServiceNowResponse<any[]>>({
+      method: "GET",
+      url: `/api/now/attachment`,
+      params: {
+        sysparm_query: `table_name=${tableName}^table_sys_id=${recordSysId}^ORDERBYDESCsys_created_on`,
+      },
+    });
+    return data.result || [];
+  }
+
+  /**
+   * Download attachment content as Buffer.
+   */
+  public async downloadAttachment(attachmentSysId: string): Promise<{ data: Buffer; contentType: string; fileName: string }> {
+    const response = await this.rawRequest<ArrayBuffer>({
+      method: "GET",
+      url: `/api/now/attachment/${encodeURIComponent(attachmentSysId)}/file`,
+      responseType: "arraybuffer",
+      headers: {
+        Accept: "*/*",
+      },
+      maxContentLength: 25 * 1024 * 1024,
+    });
+
+    const contentType = (response.headers["content-type"] as string) || "application/octet-stream";
+    const contentDisposition = (response.headers["content-disposition"] as string) || "";
+    let fileName = "";
+    const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+    if (match && match[1]) {
+      fileName = decodeURIComponent(match[1]);
+    }
+
+    return {
+      data: Buffer.from(response.data),
+      contentType,
+      fileName,
+    };
+  }
+
+  /**
+   * Upload an attachment to a record.
+   */
+  public async uploadAttachment(
+    tableName: string,
+    recordSysId: string,
+    fileName: string,
+    fileBuffer: Buffer,
+    contentType = "application/octet-stream"
+  ): Promise<any> {
+    if (fileBuffer.length > 25 * 1024 * 1024) {
+      throw new Error("Attachment size exceeds maximum limit of 25MB.");
+    }
+
+    const response = await this.rawRequest<{ result: any }>({
+      method: "POST",
+      url: `/api/now/attachment/file`,
+      params: {
+        table_name: tableName,
+        table_sys_id: recordSysId,
+        file_name: fileName,
+      },
+      headers: {
+        "Content-Type": contentType,
+        Accept: "application/json",
+      },
+      data: fileBuffer,
+      maxBodyLength: 25 * 1024 * 1024,
+    });
+
+    return response.data?.result || response.data;
+  }
+
+  /**
+   * Delete an attachment by sys_id.
+   */
+  public async deleteAttachment(attachmentSysId: string): Promise<boolean> {
+    await this.rawRequest({
+      method: "DELETE",
+      url: `/api/now/attachment/${encodeURIComponent(attachmentSysId)}`,
+    });
+    return true;
   }
 }
